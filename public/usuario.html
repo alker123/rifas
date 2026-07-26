@@ -12,6 +12,8 @@
     h1 { font-size: 24px; font-weight: 700; color: #2d3748; margin-bottom: 4px; }
     .sub-extracao { color: #718096; font-size: 14px; margin-bottom: 20px; }
 
+    .hidden { display: none !important; }
+
     /* Seção Consultar Meus Números */
     .search-box { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-bottom: 25px; }
     .search-box h3 { font-size: 15px; margin-bottom: 8px; color: #1e293b; }
@@ -81,14 +83,19 @@
     <h1 id="nomeRifa">Carregando...</h1>
     <div class="sub-extracao" id="extracao">Sorteio via Sorteador</div>
 
-    <!-- CONSULTAR MEUS NÚMEROS -->
+    <!-- CONSULTAR MEUS NÚMEROS (Sem Autocomplete Privado) -->
     <div class="search-box">
       <h3>🔍 Ver Minhas Cotas / Status</h3>
       <div class="search-flex">
-        <input type="text" id="inputBusca" placeholder="Digite seu Apelido ou Telefone">
+        <input type="text" id="inputBusca" placeholder="Digite seu Apelido ou Telefone" autocomplete="off">
         <button class="btn-buscar" onclick="buscarMinhasCotas()">Buscar</button>
       </div>
       <div id="resultadoBusca" class="res-busca"></div>
+    </div>
+
+    <!-- CAIXA DE TEMPO DA RESERVA (Oculta por padrão) -->
+    <div id="boxTempoReserva" class="hidden" style="background: #fff3cd; color: #856404; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ffeeba;">
+      <strong>⏳ Sua reserva expira em:</strong> <span id="contadorTempo">Calculando...</span>
     </div>
 
     <div class="info-grid">
@@ -102,7 +109,7 @@
       </div>
     </div>
 
-    <!-- Metrics -->
+    <!-- Métricas -->
     <div class="cards-grid">
       <div class="card card-disp">
         <div class="card-num" id="qtdDisponivel">0</div>
@@ -121,10 +128,10 @@
     <div class="porcentagem" id="porcentagem">0% vendido</div>
     <div class="select-title">Selecione os títulos disponíveis</div>
 
-    <!-- Numbers -->
+    <!-- Grade de Números -->
     <div class="numbers-grid" id="gridNumeros"></div>
 
-    <!-- Summary -->
+    <!-- Resumo de Seleção -->
     <div class="summary-box">
       <div class="qty-info">Quantidade: <strong id="qty">0</strong></div>
       <div class="total-info">Valor Total: <strong id="total">R$ 0,00</strong></div>
@@ -132,7 +139,7 @@
     </div>
   </div>
 
-  <!-- MODAL -->
+  <!-- MODAL DE CHECKOUT -->
   <div id="modalCheckout" class="modal">
     <div class="modal-content">
       <h2>Finalizar Reserva</h2>
@@ -163,16 +170,19 @@
 
   <script>
     let valorUnitario = 0;
+    let tempoReservaConfig = "1 horas";
     let numerosSelecionados = [];
     let todasReservas = [];
+    let intervaloContador = null;
+    let intervaloAutoUpdate = null;
     
     const urlParams = new URLSearchParams(window.location.search);
     const rifaId = urlParams.get('id');
 
-    async function carregarDados() {
+    async function carregarDados(silencioso = false) {
       if (!rifaId) {
         document.getElementById('nomeRifa').innerText = 'Nenhuma rifa selecionada.';
-        alert('Acesse esta página através de um link válido de rifa!');
+        if (!silencioso) alert('Acesse esta página através de um link válido de rifa!');
         return;
       }
 
@@ -186,6 +196,7 @@
         const data = await res.json();
         const config = data.config || {};
         valorUnitario = parseFloat(config.valorTitulo || 0);
+        tempoReservaConfig = config.tempoReserva || "1 horas";
         todasReservas = data.reservas || [];
 
         document.getElementById('nomeRifa').innerText = config.nomeRifa || 'Sem nome';
@@ -196,7 +207,7 @@
         const compradosSet = new Set();
 
         todasReservas.forEach(r => {
-          if (r.pago === "sim") {
+          if (r.pago === "sim" || r.comprado === "sim") {
             (r.numeros || []).forEach(n => compradosSet.add(n));
           } else {
             (r.numeros || []).forEach(n => reservadosSet.add(n));
@@ -215,32 +226,54 @@
         const perc = total > 0 ? ((qtdComprados / total) * 100).toFixed(0) : 0;
         document.getElementById('porcentagem').innerText = perc + '% vendido';
 
-        // Render Grid
+        // Renderização Inteligente da Grade
         const grid = document.getElementById('gridNumeros');
-        grid.innerHTML = '';
 
-        for (let i = 1; i <= total; i++) {
-          const numStr = String(i).padStart(3, '0');
-          const btn = document.createElement('button');
-          btn.className = 'num-btn';
-          btn.innerText = numStr;
-          btn.setAttribute('data-num', numStr);
+        if (grid.children.length === 0) {
+          grid.innerHTML = '';
+          for (let i = 1; i <= total; i++) {
+            const numStr = String(i).padStart(3, '0');
+            const btn = document.createElement('button');
+            btn.className = 'num-btn';
+            btn.innerText = numStr;
+            btn.setAttribute('data-num', numStr);
+            btn.onclick = () => toggleNumero(btn);
+            grid.appendChild(btn);
+          }
+        }
+
+        const botoes = grid.querySelectorAll('.num-btn');
+        botoes.forEach(btn => {
+          const numStr = btn.getAttribute('data-num');
 
           if (compradosSet.has(numStr)) {
-            btn.classList.add('comprado');
+            btn.className = 'num-btn comprado';
             btn.disabled = true;
+            numerosSelecionados = numerosSelecionados.filter(n => n !== numStr);
           } else if (reservadosSet.has(numStr)) {
-            btn.classList.add('reservado');
+            btn.className = 'num-btn reservado';
             btn.disabled = true;
+            numerosSelecionados = numerosSelecionados.filter(n => n !== numStr);
           } else {
-            btn.onclick = () => toggleNumero(btn);
+            btn.disabled = false;
+            if (numerosSelecionados.includes(numStr)) {
+              btn.className = 'num-btn selected';
+            } else {
+              btn.className = 'num-btn';
+            }
           }
+        });
 
-          grid.appendChild(btn);
+        atualizarResumo();
+
+        // Atualiza a busca em segundo plano APENAS se o usuário já tiver buscado algo antes
+        const termoBusca = document.getElementById('inputBusca').value.trim();
+        if (termoBusca && document.getElementById('resultadoBusca').innerHTML !== '') {
+          buscarMinhasCotas(true);
         }
+
       } catch (err) {
-        console.error(err);
-        document.getElementById('nomeRifa').innerText = 'Erro ao carregar rifa.';
+        console.error('Erro ao atualizar dados automaticamente:', err);
       }
     }
 
@@ -305,49 +338,113 @@
       });
 
       if (res.ok) {
-        alert('Reserva realizada com sucesso! Verifique suas cotas no campo de busca.');
-        window.location.reload();
+        alert('Reserva realizada com sucesso! Digite seu apelido/telefone no campo de busca para consultar.');
+        document.getElementById('modalCheckout').style.display = 'none';
+        numerosSelecionados = [];
+        carregarDados();
       } else {
         alert('Erro ao realizar reserva.');
       }
     }
 
-    // Função de busca de cotas do usuário
-    function buscarMinhasCotas() {
+    // Busca Privada: Apenas se digitar o termo exato e clicar em 'Buscar'
+    function buscarMinhasCotas(silencioso = false) {
       const termo = document.getElementById('inputBusca').value.trim().toLowerCase();
       const divRes = document.getElementById('resultadoBusca');
+      const boxTempo = document.getElementById('boxTempoReserva');
 
       if (!termo) {
-        divRes.innerHTML = '<span style="color:red;">Digite algo para buscar!</span>';
+        if (!silencioso) divRes.innerHTML = '<span style="color:red;">Digite seu apelido ou telefone para buscar!</span>';
+        if (boxTempo) boxTempo.classList.add('hidden');
         return;
       }
 
       const encontradas = todasReservas.filter(r => 
-        (r.apelido && r.apelido.toLowerCase().includes(termo)) ||
+        (r.apelido && r.apelido.toLowerCase() === termo) ||
         (r.telefone && r.telefone.includes(termo))
       );
 
       if (encontradas.length === 0) {
-        divRes.innerHTML = '<strong>Nenhuma cota encontrada para este termo.</strong>';
+        divRes.innerHTML = '<strong>Nenhuma cota encontrada para este apelido/telefone.</strong>';
+        if (boxTempo) boxTempo.classList.add('hidden');
         return;
       }
 
       let html = '<ul>';
+      let possuiReservaPendente = false;
+
       encontradas.forEach(r => {
-        const isPago = r.pago === 'sim';
+        const isPago = r.pago === 'sim' || r.comprado === 'sim';
         const statusBadge = isPago ? '<span class="badge-pago">PAGO</span>' : '<span class="badge-pendente">A PAGAR</span>';
         const numList = (r.numeros || []).join(', ');
+        const nomeExibicao = r.apelido || 'Anônimo';
         
         html += `<li style="margin-bottom:6px;">
-          Apelido: <strong>${r.apelido}</strong> | Números: <strong>[ ${numList} ]</strong> | Status: ${statusBadge}
+          Apelido: <strong>${nomeExibicao}</strong> | Números: <strong>[ ${numList} ]</strong> | Status: ${statusBadge}
         </li>`;
+
+        if (!isPago && r.criadoEm) {
+          possuiReservaPendente = true;
+          iniciarContadorReserva(r.criadoEm, tempoReservaConfig);
+        }
       });
       html += '</ul>';
 
       divRes.innerHTML = html;
+
+      // Oculta a caixa do tempo caso não haja reservas pendentes
+      if (!possuiReservaPendente && boxTempo) {
+        boxTempo.classList.add('hidden');
+        if (intervaloContador) clearInterval(intervaloContador);
+      }
     }
 
+    // Gerenciador do relógio regressivo
+    function iniciarContadorReserva(criadoEm, tempoReservaStr) {
+      const horasLimite = parseInt(tempoReservaStr, 10) || 1;
+      const tempoLimiteMs = horasLimite * 60 * 60 * 1000;
+      
+      const dataExpiracao = new Date(criadoEm).getTime() + tempoLimiteMs;
+
+      const boxTempo = document.getElementById('boxTempoReserva');
+      const displayContador = document.getElementById('contadorTempo');
+
+      if (boxTempo) boxTempo.classList.remove('hidden');
+
+      if (intervaloContador) clearInterval(intervaloContador);
+
+      intervaloContador = setInterval(() => {
+        const agora = Date.now();
+        const tempoRestante = dataExpiracao - agora;
+
+        if (tempoRestante <= 0) {
+          clearInterval(intervaloContador);
+          displayContador.innerText = 'Expirada! Recarregue a página.';
+          if (boxTempo) boxTempo.classList.add('hidden');
+          alert('Seu tempo de reserva expirou. Os números foram liberados.');
+          carregarDados();
+          return;
+        }
+
+        const horas = Math.floor((tempoRestante % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutos = Math.floor((tempoRestante % (1000 * 60 * 60)) / (1000 * 60));
+        const segundos = Math.floor((tempoRestante % (1000 * 60)) / 1000);
+
+        const hStr = String(horas).padStart(2, '0');
+        const mStr = String(minutos).padStart(2, '0');
+        const sStr = String(segundos).padStart(2, '0');
+
+        displayContador.innerText = `${hStr}h ${mStr}m ${sStr}s`;
+      }, 1000);
+    }
+
+    // Inicialização da página
     carregarDados();
+
+    // AUTO-UPDATE em segundo plano (polling a cada 3s)
+    intervaloAutoUpdate = setInterval(() => {
+      carregarDados(true);
+    }, 3000);
   </script>
 </body>
 </html>

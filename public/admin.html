@@ -294,6 +294,7 @@
   <script>
     let currentUserKey = null;
     let currentRifaId = null;
+    let intervaloAutoUpdateAdmin = null;
 
     // BLOQUEIO DE SEGURANÇA: Sempre limpa sessões antigas ao abrir a página
     window.addEventListener('DOMContentLoaded', () => {
@@ -303,9 +304,30 @@
     });
 
     function exibirTelaLogin() {
+      pararAutoUpdate();
       document.getElementById('sectionAuth').classList.remove('hidden');
       document.getElementById('sectionDashboard').classList.add('hidden');
       document.getElementById('sectionPainelRifa').classList.add('hidden');
+    }
+
+    // === GERENCIADOR DO AUTO-UPDATE ===
+    function iniciarAutoUpdate() {
+      pararAutoUpdate();
+      // Atualiza os dados do painel ativo a cada 3 segundos em segundo plano
+      intervaloAutoUpdateAdmin = setInterval(() => {
+        if (currentRifaId && !document.getElementById('sectionPainelRifa').classList.contains('hidden')) {
+          carregarDadosRifaAtiva(true);
+        } else if (currentUserKey && !document.getElementById('sectionDashboard').classList.contains('hidden')) {
+          carregarListaRifas(true);
+        }
+      }, 3000);
+    }
+
+    function pararAutoUpdate() {
+      if (intervaloAutoUpdateAdmin) {
+        clearInterval(intervaloAutoUpdateAdmin);
+        intervaloAutoUpdateAdmin = null;
+      }
     }
 
     // === AUTENTICAÇÃO ===
@@ -365,6 +387,7 @@
     }
 
     function logout() {
+      pararAutoUpdate();
       localStorage.clear();
       sessionStorage.clear();
       currentUserKey = null;
@@ -376,55 +399,68 @@
 
     // === DASHBOARD E RIFAS ===
     async function mostrarDashboard() {
+      currentRifaId = null; // Limpa a rifa ativa ao voltar para a lista
       document.getElementById('sectionAuth').classList.add('hidden');
       document.getElementById('sectionPainelRifa').classList.add('hidden');
       document.getElementById('sectionDashboard').classList.remove('hidden');
       document.getElementById('userDisplay').innerText = localStorage.getItem('usuario') || 'Admin';
 
-      carregarListaRifas();
+      await carregarListaRifas();
+      iniciarAutoUpdate();
     }
 
-    async function carregarListaRifas() {
+    async function carregarListaRifas(silencioso = false) {
       if (!currentUserKey) return;
 
-      const res = await fetch(`/api/admin/${currentUserKey}/rifas`);
-      const rifasObj = await res.json();
+      try {
+        const res = await fetch(`/api/admin/${currentUserKey}/rifas`);
+        const rifasObj = await res.json();
 
-      const container = document.getElementById('listaRifas');
-      container.innerHTML = '';
+        const container = document.getElementById('listaRifas');
+        const keys = Object.keys(rifasObj || {});
 
-      const keys = Object.keys(rifasObj || {});
-      if (keys.length === 0) {
-        container.innerHTML = '<p>Você ainda não possui nenhuma rifa cadastrada.</p>';
-        return;
+        if (keys.length === 0) {
+          container.innerHTML = '<p>Você ainda não possui nenhuma rifa cadastrada.</p>';
+          return;
+        }
+
+        // Monta o novo conteúdo e só substitui se houver alteração de conteúdo para não travar a tela
+        let htmlFinal = '';
+        keys.forEach(id => {
+          const r = rifasObj[id];
+          const linkComprador = `${window.location.origin}/?id=${id}`;
+
+          htmlFinal += `
+            <div class="rifa-item">
+              <div class="rifa-item-header">
+                <div>
+                  <strong style="font-size:16px;">${r.nomeRifa}</strong><br>
+                  <small>R$ ${parseFloat(r.valorTitulo || 0).toFixed(2)} | ${r.qtdNumeros} Números</small>
+                </div>
+                <div>
+                  <button class="btn-success" onclick="abrirRifa('${id}')">⚙️ Gerenciar</button>
+                  <button class="btn-danger" onclick="excluirRifa('${id}')">🗑️ Excluir</button>
+                </div>
+              </div>
+              
+              <label style="margin-top:8px;">Link do Comprador:</label>
+              <div class="link-group">
+                <input type="text" value="${linkComprador}" readonly id="input_link_${id}">
+                <button type="button" class="btn-secondary" onclick="copiarLink('input_link_${id}')">📋 Copiar Link</button>
+              </div>
+            </div>
+          `;
+        });
+
+        // Atualização limpa
+        if (container.getAttribute('data-hash') !== JSON.stringify(rifasObj)) {
+          container.innerHTML = htmlFinal;
+          container.setAttribute('data-hash', JSON.stringify(rifasObj));
+        }
+
+      } catch (err) {
+        if (!silencioso) console.error('Erro ao carregar lista de rifas:', err);
       }
-
-      keys.forEach(id => {
-        const r = rifasObj[id];
-        const linkComprador = `${window.location.origin}/?id=${id}`;
-
-        const div = document.createElement('div');
-        div.className = 'rifa-item';
-        div.innerHTML = `
-          <div class="rifa-item-header">
-            <div>
-              <strong style="font-size:16px;">${r.nomeRifa}</strong><br>
-              <small>R$ ${parseFloat(r.valorTitulo || 0).toFixed(2)} | ${r.qtdNumeros} Números</small>
-            </div>
-            <div>
-              <button class="btn-success" onclick="abrirRifa('${id}')">⚙️ Gerenciar</button>
-              <button class="btn-danger" onclick="excluirRifa('${id}')">🗑️ Excluir</button>
-            </div>
-          </div>
-          
-          <label style="margin-top:8px;">Link do Comprador:</label>
-          <div class="link-group">
-            <input type="text" value="${linkComprador}" readonly id="input_link_${id}">
-            <button type="button" class="btn-secondary" onclick="copiarLink('input_link_${id}')">📋 Copiar Link</button>
-          </div>
-        `;
-        container.appendChild(div);
-      });
     }
 
     function copiarLink(inputId) {
@@ -471,63 +507,82 @@
       document.getElementById('sectionDashboard').classList.add('hidden');
       document.getElementById('sectionPainelRifa').classList.remove('hidden');
 
-      carregarDadosRifaAtiva();
+      await carregarDadosRifaAtiva();
+      iniciarAutoUpdate();
     }
 
     function voltarDashboard() {
       mostrarDashboard();
     }
 
-    async function carregarDadosRifaAtiva() {
-      const resRifa = await fetch(`/api/rifa/${currentRifaId}/data`);
-      const data = await resRifa.json();
-      const config = data.config || {};
+    async function carregarDadosRifaAtiva(silencioso = false) {
+      if (!currentRifaId) return;
 
-      document.getElementById('tituloRifaAtiva').innerText = `Gerenciando: ${config.nomeRifa || 'Rifa'}`;
-      document.getElementById('editNomeRifa').value = config.nomeRifa || '';
-      document.getElementById('editValorTitulo').value = config.valorTitulo || '';
-      document.getElementById('editQtdNumeros').value = config.qtdNumeros || '100';
-      document.getElementById('editTempoReserva').value = config.tempoReserva || '1 horas';
-      document.getElementById('editDataSorteio').value = config.dataSorteio || '';
-      document.getElementById('editHoraSorteio').value = config.horaSorteio || '';
+      try {
+        const resRifa = await fetch(`/api/rifa/${currentRifaId}/data`);
+        const data = await resRifa.json();
+        const config = data.config || {};
 
-      const resReservas = await fetch(`/api/admin/rifas/${currentRifaId}/reservas`);
-      const reservasObj = await resReservas.json();
+        // Só atualiza os campos de edição se não for uma chamada silenciosa de background
+        // evitando sobrescrever o que o admin está digitando nos campos
+        if (!silencioso) {
+          document.getElementById('tituloRifaAtiva').innerText = `Gerenciando: ${config.nomeRifa || 'Rifa'}`;
+          document.getElementById('editNomeRifa').value = config.nomeRifa || '';
+          document.getElementById('editValorTitulo').value = config.valorTitulo || '';
+          document.getElementById('editQtdNumeros').value = config.qtdNumeros || '100';
+          document.getElementById('editTempoReserva').value = config.tempoReserva || '1 horas';
+          document.getElementById('editDataSorteio').value = config.dataSorteio || '';
+          document.getElementById('editHoraSorteio').value = config.horaSorteio || '';
+        }
 
-      const tbody = document.getElementById('tabelaReservas');
-      tbody.innerHTML = '';
+        const resReservas = await fetch(`/api/admin/rifas/${currentRifaId}/reservas`);
+        const reservasObj = await resReservas.json();
 
-      const keys = Object.keys(reservasObj || {});
-      if (keys.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6">Nenhuma reserva encontrada até o momento.</td></tr>';
-        return;
-      }
+        const tbody = document.getElementById('tabelaReservas');
+        const keys = Object.keys(reservasObj || {});
 
-      keys.forEach(key => {
-        const r = reservasObj[key];
-        const isPago = r.pago === "sim" || r.comprado === "sim";
+        if (keys.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6">Nenhuma reserva encontrada até o momento.</td></tr>';
+          return;
+        }
 
-        const acaoHTML = isPago 
-          ? `<span class="badge-ok">PAGO</span>`
-          : `
-            <select id="select_${key}" style="width: auto; display: inline-block;">
-              <option value="nao">Pendente</option>
-              <option value="sim">Pago</option>
-            </select>
-            <button class="btn-success" style="padding: 4px 8px; font-size: 12px; margin-top: 0;" onclick="confirmarPagamento('${key}')">Salvar</button>
+        // Compara se mudou alguma reserva antes de redesenhar a tabela
+        if (tbody.getAttribute('data-hash') === JSON.stringify(reservasObj)) {
+          return; // Não houve alterações, mantém o DOM intacto
+        }
+
+        tbody.innerHTML = '';
+        tbody.setAttribute('data-hash', JSON.stringify(reservasObj));
+
+        keys.forEach(key => {
+          const r = reservasObj[key];
+          const isPago = r.pago === "sim" || r.comprado === "sim";
+
+          const acaoHTML = isPago 
+            ? `<span class="badge-ok">PAGO</span>`
+            : `
+              <select id="select_${key}" style="width: auto; display: inline-block;">
+                <option value="nao">Pendente</option>
+                <option value="sim">Pago</option>
+              </select>
+              <button class="btn-success" style="padding: 4px 8px; font-size: 12px; margin-top: 0;" onclick="confirmarPagamento('${key}')">Salvar</button>
+            `;
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${r.nomeCompleto || '-'}</td>
+            <td>${r.apelido || '-'}</td>
+            <td>${r.telefone || '-'}</td>
+            <td>${(r.numeros || []).join(', ')}</td>
+            <td>R$ ${parseFloat(r.valorTotal || 0).toFixed(2)}</td>
+            <td>${acaoHTML}</td>
           `;
+          tbody.appendChild(tr);
+        });
 
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${r.nomeCompleto || '-'}</td>
-          <td>${r.apelido || '-'}</td>
-          <td>${r.telefone || '-'}</td>
-          <td>${(r.numeros || []).join(', ')}</td>
-          <td>R$ ${parseFloat(r.valorTotal || 0).toFixed(2)}</td>
-          <td>${acaoHTML}</td>
-        `;
-        tbody.appendChild(tr);
-      });
+      } catch (err) {
+        if (!silencioso) console.error('Erro ao atualizar dados do painel:', err);
+      }
     }
 
     document.getElementById('formConfigRifa').addEventListener('submit', async (e) => {

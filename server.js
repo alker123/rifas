@@ -88,6 +88,40 @@ async function dbDelete(nodePath) {
   await fetch(`${FIREBASE_URL}/${nodePath}.json`, { method: 'DELETE' });
 }
 
+// === HELPER PARA REMOVER RESERVAS EXPIRADAS ===
+async function limparReservasExpiradas(rifaId) {
+  try {
+    const config = await dbGet(`rifasNumeros/${rifaId}`);
+    if (!config || !config.tempoReserva) return;
+
+    // Extrai o número de horas da string "1 horas", "6 horas", etc.
+    const horasLimite = parseInt(config.tempoReserva, 10) || 1;
+    const tempoLimiteMs = horasLimite * 60 * 60 * 1000; // Converte horas para milissegundos
+    const agora = Date.now();
+
+    const reservas = (await dbGet(`reservas/${rifaId}`)) || {};
+
+    for (const [key, reserva] of Object.entries(reservas)) {
+      // Ignora se já estiver pago
+      const isPago = reserva.pago === 'sim' || reserva.comprado === 'sim';
+      if (isPago) continue;
+
+      // Verifica quando foi criada
+      const dataCriacao = new Date(reserva.criadoEm).getTime();
+      
+      if (isNaN(dataCriacao)) continue;
+
+      // Se o tempo atual for maior que a criação + limite, a reserva expirou
+      if (agora - dataCriacao > tempoLimiteMs) {
+        console.log(`⏱️ Reserva ${key} da rifa ${rifaId} expirou. Removendo...`);
+        await dbDelete(`reservas/${rifaId}/${key}`);
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao limpar reservas expiradas:', err);
+  }
+}
+
 // === ROTAS DE PÁGINAS ===
 
 // Se acessar com ?id=... vai direto para a página do comprador, senão vai para o login do Admin
@@ -206,6 +240,11 @@ app.delete('/api/admin/:userKey/rifas/:id', async (req, res) => {
 app.get('/api/rifa/:id/data', async (req, res) => {
   try {
     const { id } = req.params;
+
+    // 1. Limpa reservas pendentes que já passaram do tempo limite
+    await limparReservasExpiradas(id);
+
+    // 2. Busca os dados atualizados
     const config = await dbGet(`rifasNumeros/${id}`);
 
     if (!config) {
