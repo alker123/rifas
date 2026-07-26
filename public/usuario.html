@@ -83,7 +83,7 @@
     <h1 id="nomeRifa">Carregando...</h1>
     <div class="sub-extracao" id="extracao">Sorteio via Sorteador</div>
 
-    <!-- CONSULTAR MEUS NÚMEROS (Sem Autocomplete Privado) -->
+    <!-- CONSULTAR MEUS NÚMEROS -->
     <div class="search-box">
       <h3>🔍 Ver Minhas Cotas / Status</h3>
       <div class="search-flex">
@@ -347,7 +347,7 @@
       }
     }
 
-    // Busca Privada: Apenas se digitar o termo exato e clicar em 'Buscar'
+    // Busca Privada
     function buscarMinhasCotas(silencioso = false) {
       const termo = document.getElementById('inputBusca').value.trim().toLowerCase();
       const divRes = document.getElementById('resultadoBusca');
@@ -392,14 +392,13 @@
 
       divRes.innerHTML = html;
 
-      // Oculta a caixa do tempo caso não haja reservas pendentes
       if (!possuiReservaPendente && boxTempo) {
         boxTempo.classList.add('hidden');
         if (intervaloContador) clearInterval(intervaloContador);
       }
     }
 
-    // Gerenciador do relógio regressivo
+    // Relógio regressivo sem alert/bloqueio
     function iniciarContadorReserva(criadoEm, tempoReservaStr) {
       const horasLimite = parseInt(tempoReservaStr, 10) || 1;
       const tempoLimiteMs = horasLimite * 60 * 60 * 1000;
@@ -419,10 +418,9 @@
 
         if (tempoRestante <= 0) {
           clearInterval(intervaloContador);
-          displayContador.innerText = 'Expirada! Recarregue a página.';
           if (boxTempo) boxTempo.classList.add('hidden');
-          alert('Seu tempo de reserva expirou. Os números foram liberados.');
-          carregarDados();
+          // Recarrega os dados silenciosamente para liberar o número na hora
+          carregarDados(true);
           return;
         }
 
