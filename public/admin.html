@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel Admin - Login</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #1e293b;
+      --border: #cbd5e1;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 900px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+    }
+
+    h1, h2, h3 { margin-top: 0; color: #0f172a; }
+
+    label {
+      display: block;
+      margin-top: 12px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 4px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .row > div { flex: 1; }
+
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 14px;
+      transition: background 0.2s;
+    }
+
+    button:hover { opacity: 0.9; }
+    .btn-danger { background: var(--danger); }
+    .btn-success { background: var(--success); }
+    .btn-secondary { background: #64748b; }
+
+    .hidden { display: none !important; }
+
+    .rifa-item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      background: #f1f5f9;
+    }
+
+    .rifa-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .link-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .link-group input {
+      margin-top: 0;
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+      font-size: 14px;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px;
+      text-align: left;
+    }
+
+    th { background: #f1f5f9; }
+
+    .badge-ok {
+      background-color: var(--success);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- ==================== 1. TELA DE LOGIN (ABRE SEMPRE PRIMEIRO) ==================== -->
+    <div id="sectionAuth" class="card">
+      <h1 id="authTitle">🔑 Acesso ao Painel Admin</h1>
+      <p style="color: #64748b; font-size: 14px;">Digite seu usuário e senha para entrar no sistema.</p>
+      
+      <form id="formAuth" onsubmit="event.preventDefault(); fazerLogin();">
+        <label>Usuário:</label>
+        <input type="text" id="authUsuario" placeholder="Digite seu usuário" required autocomplete="username">
+        
+        <label>Senha:</label>
+        <input type="password" id="authSenha" placeholder="Digite sua senha" required autocomplete="current-password">
+        
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+          <button type="submit">Entrar</button>
+          <button type="button" class="btn-secondary" onclick="fazerCadastro()">Criar Nova Conta</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ==================== 2. PAINEL PRINCIPAL (DASHBOARD) ==================== -->
+    <div id="sectionDashboard" class="hidden">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>📋 Painel de Rifas (<span id="userDisplay"></span>)</h2>
+        <button class="btn-danger" onclick="logout()">🔴 Sair do Sistema</button>
+      </div>
+
+      <!-- Formulário: Criar Nova Rifa -->
+      <div class="card">
+        <h3>➕ Criar Nova Rifa</h3>
+        <form id="formCriarRifa">
+          <label>Nome da Rifa:</label>
+          <input type="text" id="novoNomeRifa" placeholder="Ex: Rifa Solidária - IE entrei na roda" required>
+
+          <div class="row">
+            <div>
+              <label>Valor do Título (R$):</label>
+              <input type="number" step="0.01" id="novoValorTitulo" value="15.00" required>
+            </div>
+            <div>
+              <label>Quantidade de Números:</label>
+              <select id="novoQtdNumeros">
+                <option value="100">100 (001 a 100)</option>
+                <option value="200">200 (001 a 200)</option>
+                <option value="300">300 (001 a 300)</option>
+                <option value="400">400 (001 a 400)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Tempo limite de Reserva:</label>
+              <select id="novoTempoReserva">
+                <option value="1 horas">1 hora</option>
+                <option value="6 horas">6 horas</option>
+                <option value="12 horas">12 horas</option>
+              </select>
+            </div>
+            <div>
+              <label>Data do Sorteio:</label>
+              <input type="date" id="novoDataSorteio" required>
+            </div>
+            <div>
+              <label>Hora do Sorteio:</label>
+              <input type="time" id="novoHoraSorteio" value="21:07" required>
+            </div>
+          </div>
+
+          <button type="submit" class="btn-success">Cadastrar Rifa</button>
+        </form>
+      </div>
+
+      <!-- Lista de Rifas -->
+      <div class="card">
+        <h3>📂 Minhas Rifas Cadastradas</h3>
+        <div id="listaRifas">Carregando rifas...</div>
+      </div>
+    </div>
+
+    <!-- ==================== 3. PAINEL DE GERENCIAMENTO DE RIFA INDIVIDUAL ==================== -->
+    <div id="sectionPainelRifa" class="hidden">
+      <button class="btn-secondary" onclick="voltarDashboard()">← Voltar para Minhas Rifas</button>
+      <h1 style="margin-top: 15px;" id="tituloRifaAtiva">Gerenciar Rifa</h1>
+
+      <!-- Editar Rifa -->
+      <div class="card">
+        <h2>1. Editar Configurações</h2>
+        <form id="formConfigRifa">
+          <label>Nome da Rifa:</label>
+          <input type="text" id="editNomeRifa" required>
+
+          <div class="row">
+            <div>
+              <label>Valor do Título (R$):</label>
+              <input type="number" step="0.01" id="editValorTitulo" required>
+            </div>
+            <div>
+              <label>Quantidade de Números:</label>
+              <select id="editQtdNumeros">
+                <option value="100">100 (001 a 100)</option>
+                <option value="200">200 (001 a 200)</option>
+                <option value="300">300 (001 a 300)</option>
+                <option value="400">400 (001 a 400)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Tempo limite de Reserva:</label>
+              <select id="editTempoReserva">
+                <option value="1 horas">1 hora</option>
+                <option value="6 horas">6 horas</option>
+                <option value="12 horas">12 horas</option>
+              </select>
+            </div>
+            <div>
+              <label>Data do Sorteio:</label>
+              <input type="date" id="editDataSorteio" required>
+            </div>
+            <div>
+              <label>Hora do Sorteio:</label>
+              <input type="time" id="editHoraSorteio" required>
+            </div>
+          </div>
+
+          <button type="submit">Salvar Alterações</button>
+        </form>
+      </div>
+
+      <!-- Reservas -->
+      <div class="card">
+        <h2>2. Reservas e Pagamentos</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Nome Completo</th>
+              <th>Apelido</th>
+              <th>Telefone</th>
+              <th>Números</th>
+              <th>Total</th>
+              <th>Status / Ação</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaReservas">
+            <tr><td colspan="6">Nenhuma reserva encontrada.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let currentUserKey = null;
+    let currentRifaId = null;
+
+    // BLOQUEIO DE SEGURANÇA: Sempre limpa sessões antigas ao abrir a página
+    window.addEventListener('DOMContentLoaded', () => {
+      localStorage.clear();
+      sessionStorage.clear();
+      exibirTelaLogin();
+    });
+
+    function exibirTelaLogin() {
+      document.getElementById('sectionAuth').classList.remove('hidden');
+      document.getElementById('sectionDashboard').classList.add('hidden');
+      document.getElementById('sectionPainelRifa').classList.add('hidden');
+    }
+
+    // === AUTENTICAÇÃO ===
+    async function fazerLogin() {
+      const usuario = document.getElementById('authUsuario').value;
+      const senha = document.getElementById('authSenha').value;
+
+      if (!usuario || !senha) {
+        return alert('Por favor, informe seu usuário e senha!');
+      }
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usuario, senha })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          currentUserKey = data.userKey;
+          localStorage.setItem('userKey', currentUserKey);
+          localStorage.setItem('usuario', data.usuario);
+          mostrarDashboard();
+        } else {
+          alert(data.error || 'Usuário ou senha inválidos.');
+        }
+      } catch (err) {
+        alert('Erro ao se conectar ao servidor.');
+      }
+    }
+
+    async function fazerCadastro() {
+      const usuario = document.getElementById('authUsuario').value;
+      const senha = document.getElementById('authSenha').value;
+
+      if (!usuario || !senha) {
+        return alert('Digite um usuário e senha para cadastrar!');
+      }
+
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usuario, senha })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          alert('Conta criada com sucesso! Agora clique em "Entrar".');
+        } else {
+          alert(data.error || 'Erro ao criar conta.');
+        }
+      } catch (err) {
+        alert('Erro ao se conectar ao servidor.');
+      }
+    }
+
+    function logout() {
+      localStorage.clear();
+      sessionStorage.clear();
+      currentUserKey = null;
+      currentRifaId = null;
+      document.getElementById('authUsuario').value = '';
+      document.getElementById('authSenha').value = '';
+      exibirTelaLogin();
+    }
+
+    // === DASHBOARD E RIFAS ===
+    async function mostrarDashboard() {
+      document.getElementById('sectionAuth').classList.add('hidden');
+      document.getElementById('sectionPainelRifa').classList.add('hidden');
+      document.getElementById('sectionDashboard').classList.remove('hidden');
+      document.getElementById('userDisplay').innerText = localStorage.getItem('usuario') || 'Admin';
+
+      carregarListaRifas();
+    }
+
+    async function carregarListaRifas() {
+      if (!currentUserKey) return;
+
+      const res = await fetch(`/api/admin/${currentUserKey}/rifas`);
+      const rifasObj = await res.json();
+
+      const container = document.getElementById('listaRifas');
+      container.innerHTML = '';
+
+      const keys = Object.keys(rifasObj || {});
+      if (keys.length === 0) {
+        container.innerHTML = '<p>Você ainda não possui nenhuma rifa cadastrada.</p>';
+        return;
+      }
+
+      keys.forEach(id => {
+        const r = rifasObj[id];
+        const linkComprador = `${window.location.origin}/?id=${id}`;
+
+        const div = document.createElement('div');
+        div.className = 'rifa-item';
+        div.innerHTML = `
+          <div class="rifa-item-header">
+            <div>
+              <strong style="font-size:16px;">${r.nomeRifa}</strong><br>
+              <small>R$ ${parseFloat(r.valorTitulo || 0).toFixed(2)} | ${r.qtdNumeros} Números</small>
+            </div>
+            <div>
+              <button class="btn-success" onclick="abrirRifa('${id}')">⚙️ Gerenciar</button>
+              <button class="btn-danger" onclick="excluirRifa('${id}')">🗑️ Excluir</button>
+            </div>
+          </div>
+          
+          <label style="margin-top:8px;">Link do Comprador:</label>
+          <div class="link-group">
+            <input type="text" value="${linkComprador}" readonly id="input_link_${id}">
+            <button type="button" class="btn-secondary" onclick="copiarLink('input_link_${id}')">📋 Copiar Link</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function copiarLink(inputId) {
+      const input = document.getElementById(inputId);
+      input.select();
+      navigator.clipboard.writeText(input.value);
+      alert('Link copiado com sucesso!');
+    }
+
+    document.getElementById('formCriarRifa').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const body = {
+        nomeRifa: document.getElementById('novoNomeRifa').value,
+        valorTitulo: document.getElementById('novoValorTitulo').value,
+        qtdNumeros: document.getElementById('novoQtdNumeros').value,
+        tempoReserva: document.getElementById('novoTempoReserva').value,
+        dataSorteio: document.getElementById('novoDataSorteio').value,
+        horaSorteio: document.getElementById('novoHoraSorteio').value
+      };
+
+      const res = await fetch(`/api/admin/${currentUserKey}/rifas/criar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) {
+        alert('Rifa criada com sucesso!');
+        document.getElementById('formCriarRifa').reset();
+        carregarListaRifas();
+      }
+    });
+
+    async function excluirRifa(id) {
+      if (!confirm('Deseja realmente excluir esta rifa e suas reservas?')) return;
+
+      const res = await fetch(`/api/admin/${currentUserKey}/rifas/${id}`, { method: 'DELETE' });
+      if (res.ok) carregarListaRifas();
+    }
+
+    // === PAINEL DE GERENCIAMENTO ===
+    async function abrirRifa(id) {
+      currentRifaId = id;
+      document.getElementById('sectionDashboard').classList.add('hidden');
+      document.getElementById('sectionPainelRifa').classList.remove('hidden');
+
+      carregarDadosRifaAtiva();
+    }
+
+    function voltarDashboard() {
+      mostrarDashboard();
+    }
+
+    async function carregarDadosRifaAtiva() {
+      const resRifa = await fetch(`/api/rifa/${currentRifaId}/data`);
+      const data = await resRifa.json();
+      const config = data.config || {};
+
+      document.getElementById('tituloRifaAtiva').innerText = `Gerenciando: ${config.nomeRifa || 'Rifa'}`;
+      document.getElementById('editNomeRifa').value = config.nomeRifa || '';
+      document.getElementById('editValorTitulo').value = config.valorTitulo || '';
+      document.getElementById('editQtdNumeros').value = config.qtdNumeros || '100';
+      document.getElementById('editTempoReserva').value = config.tempoReserva || '1 horas';
+      document.getElementById('editDataSorteio').value = config.dataSorteio || '';
+      document.getElementById('editHoraSorteio').value = config.horaSorteio || '';
+
+      const resReservas = await fetch(`/api/admin/rifas/${currentRifaId}/reservas`);
+      const reservasObj = await resReservas.json();
+
+      const tbody = document.getElementById('tabelaReservas');
+      tbody.innerHTML = '';
+
+      const keys = Object.keys(reservasObj || {});
+      if (keys.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6">Nenhuma reserva encontrada até o momento.</td></tr>';
+        return;
+      }
+
+      keys.forEach(key => {
+        const r = reservasObj[key];
+        const isPago = r.pago === "sim" || r.comprado === "sim";
+
+        const acaoHTML = isPago 
+          ? `<span class="badge-ok">PAGO</span>`
+          : `
+            <select id="select_${key}" style="width: auto; display: inline-block;">
+              <option value="nao">Pendente</option>
+              <option value="sim">Pago</option>
+            </select>
+            <button class="btn-success" style="padding: 4px 8px; font-size: 12px; margin-top: 0;" onclick="confirmarPagamento('${key}')">Salvar</button>
+          `;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${r.nomeCompleto || '-'}</td>
+          <td>${r.apelido || '-'}</td>
+          <td>${r.telefone || '-'}</td>
+          <td>${(r.numeros || []).join(', ')}</td>
+          <td>R$ ${parseFloat(r.valorTotal || 0).toFixed(2)}</td>
+          <td>${acaoHTML}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    document.getElementById('formConfigRifa').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const body = {
+        nomeRifa: document.getElementById('editNomeRifa').value,
+        valorTitulo: document.getElementById('editValorTitulo').value,
+        qtdNumeros: document.getElementById('editQtdNumeros').value,
+        tempoReserva: document.getElementById('editTempoReserva').value,
+        dataSorteio: document.getElementById('editDataSorteio').value,
+        horaSorteio: document.getElementById('editHoraSorteio').value
+      };
+
+      const res = await fetch(`/api/admin/${currentUserKey}/rifas/${currentRifaId}/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) alert('Configurações salvas com sucesso!');
+    });
+
+    async function confirmarPagamento(key) {
+      const pago = document.getElementById('select_' + key).value;
+
+      const res = await fetch(`/api/admin/rifas/${currentRifaId}/confirmar-pagamento`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, pago })
+      });
+
+      if (res.ok) carregarDadosRifaAtiva();
+    }
+  </script>
+</body>
+</html>
